@@ -36,7 +36,3 @@ iPhone 订阅日历功能 -> 请求自己写的服务 -> 模拟登录邮箱 -> �
 3. 也可以在iPhone Safari 上调试：输入本地电脑的 ip 与相关参数，效果如下
 
 <img src="./img/dev.png" alt="231604301333_.pic_hd" style="zoom:50%;"/>
-
-## 感谢
-
-感谢[彦博大佬](http://github.com/realank) 在开发过程中给予的思路拓展及细节优化 🙏
