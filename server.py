@@ -38,7 +38,7 @@ def fetch_new_mails(alarm_before_hour, mail_model_list):
     for mail in mail_model_list:
         event_id = mail['order_id']
         event_title, event_start, event_description = CalendarResovle().generate_calendar_model(mail)
-        calendarHelper.add_event(event_id, event_title, event_start, event_start, event_description, alarm_before_hour)
+        calendarHelper.add_event(event_id, event_title, event_start, event_end, event_description, alarm_before_hour)
     return response_content(calendarHelper)
 def check_args() -> bool:
     try:
