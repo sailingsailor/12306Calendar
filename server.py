@@ -2,7 +2,7 @@ from mail_fetch import MailFetch
 from calendar_generate import CalendarGenerate
 from calendar_resovle import CalendarResovle
 from flask import Flask, request, jsonify, make_response, send_from_directory
-import shutil, re, os, pytz, random, string
+import shutil, re, os, pytz, random, string, imaplib
 from datetime import datetime
 
 app = Flask(__name__)
@@ -17,17 +17,19 @@ def do_login():
         return login_fail_file()
     user_email = request.args.get("u")
     password = request.args.get("p")
+    port = 993
     try:
         alarm_before_hour = int(request.args.get("h"))
     except:
         alarm_before_hour = 1
     try:
-        return sync_fetch(user_email, password, alarm_before_hour)
+        return sync_fetch(user_email, password, alarm_before_hour, port)
     except:
-        return server_error_file()
+        print('server error')
+        return in_file()
 
-def sync_fetch(user_email, password, alarm_before_hour):
-    mail_fetch = MailFetch(user_email, password, '')
+def sync_fetch(user_email, password, alarm_before_hour, port):
+    mail_fetch = MailFetch(user_email, password, '', port)
     if mail_fetch.login() == False:
         return login_fail_file()
     mail_model_list = mail_fetch.get_mails()
@@ -37,9 +39,10 @@ def fetch_new_mails(alarm_before_hour, mail_model_list):
     calendarHelper = CalendarGenerate('12306')
     for mail in mail_model_list:
         event_id = mail['order_id']
-        event_title, event_start, event_description = CalendarResovle().generate_calendar_model(mail)
+        event_title, event_start, event_end, event_description = CalendarResovle().generate_calendar_model(mail)
         calendarHelper.add_event(event_id, event_title, event_start, event_end, event_description, alarm_before_hour)
     return response_content(calendarHelper)
+
 def check_args() -> bool:
     try:
         email = request.args.get("u")
@@ -83,4 +86,4 @@ def response_content(calendarHelper):
     return resp
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port='8080', debug=IS_DEBUG_ENV)
+    app.run(host='0.0.0.0', port='12306', debug=IS_DEBUG_ENV)
