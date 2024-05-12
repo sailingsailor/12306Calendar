@@ -12,7 +12,7 @@
 1. 在 12306 上买完票之后，会在iPhone 日历上展示车次关键信息
 2. 可以配置在发车前多少小时提醒自己
 3. 
-<img src="./img/online.png" alt="231604301333_.pic_hd" style="zoom:50%;"/>
+<img src="./img/online.png" style="zoom:50%;"/>
 
 ## 背景
 
@@ -35,7 +35,7 @@ iPhone 订阅日历功能 -> 请求自己写的服务 -> 模拟登录邮箱 -> �
    4. 此服务为原作者提供，我仅在本地运行
 3. 效果
 
-<img src="./img/online.png" alt="231604301333_.pic_hd" style="zoom:50%;"/>
+<img src="./img/online.png" style="zoom:50%;"/>
 
 ## 开发
 
