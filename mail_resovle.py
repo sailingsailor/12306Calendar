@@ -1,74 +1,88 @@
-from lxml import etree
-from email.parser import Parser
-from email.header import decode_header
-from email.utils import parseaddr
+import poplib, datetime, os, re, pytz, requests, io, json
+import pandas as pd
+from bs4 import BeautifulSoup
+from datetime import datetime
 
-class MailResovle:
-    def resovle_to_mail(self, msg_content) -> dict:
-        msg = Parser().parsestr(msg_content) # 稍后解析出邮件:
-        if self.__check_mail(msg) == False:
-            return {}
-        order_type = self.__train_type(msg)
-        order_id, order_info = self.__mail_content(msg)
-        if len(order_id) > 0 and len(order_type) > 0 or len(order_info) > 0:
-            return {"order_id": order_id, "order_type": order_type, "order_info": order_info}
+class CalendarResovle:
+    def generate_calendar_model(self, mail):
+        order_info = mail['order_info']
+        begin_time = ''
+        time_pattern = r"\d{4}年\d{2}月\d{2}日\d{2}:\d{2}"
+        time_match = re.search(time_pattern, order_info)
+        if time_match:
+            time = time_match.group()
+            # 解析为 datetime 对象
+            begin_time = datetime.strptime(time, '%Y年%m月%d日%H:%M')
+            print("时间:", begin_time)
+
+        # 提取发站到站，连字符（-）两边的字符串
+        station = ''
+        station_pattern = r"，([^，]+)-([^，]+)，"
+        station_match = re.search(station_pattern, order_info)
+        if station_match:
+            start_station = station_match.group(1).replace("站","")
+            end_station = station_match.group(2).replace("站","")
+            station = start_station + "-" + end_station
+            print("行程:", station)
+            print("发站:", start_station)
+            print("到站:", end_station)
+
+        # 提取车次
+        train = ''
+        train_pattern = r"[A-Z]\d+次"
+        train_match = re.search(train_pattern, order_info)
+        if train_match:
+            train = train_match.group().replace("次","")
+            print("车次:", train)
+
+        # 提取座位号
+        seat = ''
+        seat_pattern = r"\d+车\d+[A-Z]号"
+        seat_match = re.search(seat_pattern, order_info)
+        if seat_match:
+            seat = seat_match.group()
+            print("座位号:", seat)
+
+        # 提取检票口
+        check_in = ''
+        check_in_pattern =  r"检票口(\w+)"
+        check_in_match = re.search(check_in_pattern, order_info)
+        if check_in_match:
+            check_in = check_in_match.group()
+            print("检票口:", check_in.replace("检票口",""))
         else:
-            return {}
+            print("未找到检票口信息。")
 
-    def __mail_content(self, msg):
-        if msg.is_multipart():
-            parts = msg.get_payload()
-            if len(parts) > 0:
-                return self.__mail_content_html(parts[0])
-        return '',''
+        # Function to extract arrival time
+        # Extract arrival time from the URL
+        url = f"http://touch.qunar.com/h5/train/trainStaChoose?trainNum={train}"
+        content = requests.get(url).text
+        # Wrap the HTML content in a StringIO object
+        content_io = io.StringIO(content)
+        # Use pandas to parse the HTML table
+        df = pd.read_html(content_io)[0]
+        # Filter the DataFrame to get the desired time
+        filtered_df = df[df["车站"].str.contains(end_station)]
+        #print(filtered_df)
+        if not filtered_df.empty:
+            arrival_time = filtered_df["到达时间"].values[0]
+            #print(arrival_time)
+            end_time = begin_time.replace(hour=int(arrival_time[:2]), minute=int(arrival_time[3:]))
+            print("到达时间:", end_time)
+        else:
+            print("Time not found.")
+        
+        calendar_start = begin_time
+        calendar_end = end_time
+        calendar_title = station + ' ' + train + '次，' + seat
+        calendar_description = mail['order_id'] + '，' + self.__order_type_text(mail['order_type']) + '，' + order_info
+        return calendar_title, calendar_start, calendar_end, calendar_description
 
-    def __mail_content_html(self, msg):
-        content_type = msg.get_content_type()
-        if  'text/html' in content_type:
-            charset = self.__content_charset(msg)
-            if charset:
-                content = msg.get_payload(decode=True).decode(charset)
-                return self.__get_order_info(content)
-        return '',''
-
-    def __get_order_info(self, content_html):
-        order_id = ''
-        order_info_str = ''
-        etree_html = etree.HTML(content_html) # 构造 entree.HTML 对象
-        order_id_xpath = '//td/div[2]/span/text()' # 设置目标 xpath 值，注意 xpath & text() 的拼接
-        order_id_result = etree_html.xpath(order_id_xpath) # 得到目标数据
-        if len(order_id_result) > 0:
-            order_id = order_id_result[0]
-        order_info_result = etree_html.xpath('//td/div/div[1]/text()') 
-        if len(order_info_result) > 0:
-            order_info_str = order_info_result[0].strip()
-        return order_id, order_info_str
-
-    def __train_type(self, msg):
-        subject = self.__decode_str(msg.get('Subject', ''))
-        if "支付通知" in subject:
-            return 'insert'
-        elif "退票通知" in subject:
-            return 'delete'
-        elif "改签通知" in subject:
-            return 'modify'
+    def __order_type_text(self, type):
+        if "insert" == type:
+            return '购票'
+        elif "delete" == type:
+            return "退票"
+        elif "modify" == type:
+            return '改签'
         return ''
-
-    def __content_charset(self, msg):
-        charset = msg.get_charset()
-        if charset is None:
-            content_type = msg.get('Content-Type', '').lower()
-            pos = content_type.find('charset=')
-            if pos >= 0:
-                charset = content_type[pos + 8:].strip()
-        return charset
-
-    def __decode_str(self, s):
-        value, charset = decode_header(s)[0]
-        if charset:
-            value = value.decode(charset)
-        return value
-
-    def __check_mail(self, msg) -> bool:
-        _, from_address = parseaddr(msg.get('From', ''))
-        return '12306@rails.com.cn' in from_address
