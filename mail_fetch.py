@@ -4,19 +4,22 @@
 from calendar_generate import CalendarGenerate
 from calendar_resovle import CalendarResovle
 from mail_resovle import MailResovle
-import poplib, os, re
+import os
+import re
+import imaplib
 
 class MailFetch:
-    def __init__(self, user_email, password, pop3_server):
-        if len(pop3_server) == 0:
-            pop3_server = 'pop.' + re.split('@',user_email)[-1]
+    def __init__(self, user_email, password, imap_server, port):
+        if len(imap_server) == 0:
+            imap_server = 'imap.' + re.split('@', user_email)[-1]
         self.user_email = user_email
         self.password = password
-        self.pop3_server = pop3_server
-        self.server = None
+        self.imap_server = imap_server
+        self.port = port
+        self.mailbox = None
 
     def get_mails(self) -> list:
-        if self.server == None:
+        if self.mailbox is None:
             return []
         mail_model_list = self.resovle_all_mails()
         mail_model_list = self.filter_validate_mail(mail_model_list)
@@ -25,18 +28,15 @@ class MailFetch:
 
     # 已排好序： 旧 -> 新
     def resovle_all_mails(self) -> list:
-        if self.server == None:
+        if self.mailbox is None:
             return []
-        server = self.server
-        _, mails, _ = server.list()     # list()返回所有邮件的编号
-        if len(mails) == 0:
-            return []
+        mailbox = self.mailbox
+        mailbox.select("12306")  # Select the "12306" mailbox
+        _, data = mailbox.search(None, "ALL")  # Search for all emails
         mail_model_list = []
-        for index in range(1, len(mails) + 1):  # 注意索引号从1开始
-            _, lines, _ = server.retr(index) # lines存储了邮件的原始文本的每一行,
-            if len(lines) == 0:
-                continue
-            msg_content = b'\r\n'.join(lines).decode('utf-8')
+        for num in data[0].split():
+            _, msg_data = mailbox.fetch(num, "(RFC822)")  # Fetch the email with the given number
+            msg_content = msg_data[0][1].decode("utf-8")
             mail_model = MailResovle().resovle_to_mail(msg_content)  # 解析出邮件
             if len(mail_model):
                 mail_model_list.append(mail_model)
@@ -44,21 +44,19 @@ class MailFetch:
 
     def login(self):
         try:
-            poplib._MAXLINE=20480
-            # 连接到POP3服务器:
-            server = poplib.POP3_SSL(self.pop3_server, 995)
-            server.user(self.user_email)
-            server.pass_(self.password)
-            self.server = server
+            # 连接到IMAP服务器:
+            mailbox = imaplib.IMAP4_SSL(self.imap_server, self.port)
+            mailbox.login(self.user_email, self.password)
+            self.mailbox = mailbox
             return True
         except Exception:
-            server = None
+            self.mailbox = None
             return False
 
     def stop_server(self):
-        if self.server == None:
+        if self.mailbox is None:
             return
-        self.server.quit() # 关闭连接
+        self.mailbox.logout()
 
     def filter_validate_mail(self, mail_model_list):
         target_list = []
@@ -75,21 +73,24 @@ class MailFetch:
             target_list.append(mail)
         return target_list
 
+
 if __name__ == '__main__':
     user_email = ''
-    password = ''	# 这个密码不是邮箱登录密码，是pop3服务密码
-    pop3_server = 'pop.qq.com'
-    mail_fetch = MailFetch(user_email, password, pop3_server)
+    password = ''  # 这个密码不是邮箱登录密码，是IMAP服务密码
+    imap_server = 'imap.126.com'
+    port = 993
+    mail_fetch = MailFetch(user_email, password, imap_server, port)
     alarm_before_hour = 2
     if mail_fetch.login():
         print("登录成功")
         mail_model_list = mail_fetch.get_mails()
         DATABASE_DIR_PATH = os.path.abspath(os.path.dirname(os.path.abspath(__file__)) + os.path.sep + "./database")
-        calendarHelper = CalendarGenerate('12306', DATABASE_DIR_PATH + '/'+ user_email +'.ics')
+        calendarHelper = CalendarGenerate('12306', DATABASE_DIR_PATH + '/' + user_email + '.ics')
         for mail in mail_model_list:
+            print(mail)
             event_id = mail['order_id']
-            event_title, event_start, event_description = CalendarResovle().generate_calendar_model(mail)
-            calendarHelper.add_event(event_id, event_title, event_start, event_start, event_description, alarm_before_hour)
+            event_title, event_start, event_end, event_description = CalendarResovle().generate_calendar_model(mail)
+            calendarHelper.add_event(event_id, event_title, event_end, event_start, event_description, alarm_before_hour)
         calendarHelper.save_ics()
     else:
         print("登录失败")
