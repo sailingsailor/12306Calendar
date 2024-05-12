@@ -7,7 +7,7 @@ class CalendarGenerate:
     def __init__(self, calendar_name, ics_file_path = './'):
         self._ics_file_path = ics_file_path
         calendar = Calendar()
-        calendar.add('prodid', '-//Calendar product for 12306//1875734581@qq.com//')
+        calendar.add('prodid', 'zou12306')
         calendar.add('version', '2.0') # 这里的 version 是 Calendar 协议的版本
         calendar.add('X-WR-CALNAME', calendar_name)
         self._calendar = calendar
@@ -54,5 +54,6 @@ if __name__ == '__main__':
     description = "description123"
     calendar_start = datetime.now()  + timedelta(seconds=10)
     calendar_start = calendar_start.astimezone(tz=pytz.timezone("UTC"))
-    helper.add_event(order_id,summary,calendar_start,calendar_start,description, 0)
+    calendar_end = datetime.now() .astimezone(tz=pytz.timezone("UTC"))
+    helper.add_event(order_id,summary,calendar_start,calendar_end,description, 0)
     helper.save_ics()
